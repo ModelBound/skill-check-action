@@ -26,7 +26,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
-      - uses: ModelBound/skill-check-action@v1.0.1
+      - uses: ModelBound/skill-check-action@v1.0.3
         with:
           mode: full
         env:
@@ -57,9 +57,9 @@ jobs:
 After a successful `full` run:
 
 ```markdown
-![ModelBound Skill Trust](https://modelbound.co/api/badge/skills.svg?repo=OWNER/REPO)
-![Skill Lint](https://modelbound.co/api/badge/skills.svg?repo=OWNER/REPO&metric=lint)
-![Optimize Savings](https://modelbound.co/api/badge/skills.svg?repo=OWNER/REPO&metric=optimize)
+[![ModelBound Skill Trust](https://modelbound.co/api/badge/skills.svg?repo=OWNER/REPO)](https://modelbound.co/connect/github-actions?repo=OWNER/REPO)
+[![Skill Lint](https://modelbound.co/api/badge/skills.svg?repo=OWNER/REPO&metric=lint)](https://modelbound.co/connect/github-actions?repo=OWNER/REPO)
+[![Optimize Savings](https://modelbound.co/api/badge/skills.svg?repo=OWNER/REPO&metric=optimize)](https://modelbound.co/connect/github-actions?repo=OWNER/REPO)
 ```
 
 ## Links
