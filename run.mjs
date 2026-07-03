@@ -5,6 +5,7 @@
  * Tier 2–3: POST /api/cli/skill-audit (requires MODELBOUND_API_KEY)
  */
 import fs from "node:fs";
+import os from "node:os";
 import path from "node:path";
 import { execSync, spawnSync } from "node:child_process";
 
@@ -128,11 +129,13 @@ function parseSkill(relPath) {
 function runLint(files) {
   const lines = [];
   let failed = false;
+  const lintCwd = os.tmpdir();
   for (const file of files) {
+    const absFile = path.resolve(file);
     const r = spawnSync(
       "npx",
-      ["-y", `--package=modelbound-mcp@${mcpVersion}`, "modelbound-mcp", "lint", file],
-      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
+      ["-y", `--package=modelbound-mcp@${mcpVersion}`, "modelbound-mcp", "lint", absFile],
+      { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"], cwd: lintCwd },
     );
     const out = `${r.stdout || ""}${r.stderr || ""}`.trim();
     if (out) lines.push(out);
