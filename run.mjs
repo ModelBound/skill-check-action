@@ -46,7 +46,7 @@ function globMatch(relPath, pattern) {
     .replace(/\*\*/g, "___GLOBSTAR___")
     .replace(/\*/g, "[^/]*")
     .replace(/___GLOBSTAR___/g, ".*");
-  return new RegExp(`^${re}$").test(relPath);
+  return new RegExp(`^${re}$`).test(relPath);
 }
 
 function matchesAnyGlob(relPath) {
