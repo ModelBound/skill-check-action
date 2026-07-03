@@ -131,7 +131,7 @@ function runLint(files) {
   for (const file of files) {
     const r = spawnSync(
       "npx",
-      ["-y", `modelbound-mcp@${mcpVersion}`, "lint", file],
+      ["-y", `--package=modelbound-mcp@${mcpVersion}`, "modelbound-mcp", "lint", file],
       { encoding: "utf8", stdio: ["ignore", "pipe", "pipe"] },
     );
     const out = `${r.stdout || ""}${r.stderr || ""}`.trim();
