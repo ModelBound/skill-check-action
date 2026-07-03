@@ -29,6 +29,7 @@ jobs:
       - uses: ModelBound/skill-check-action@v1.0.3
         with:
           mode: full
+          scan-all-on-main: true
         env:
           MODELBOUND_API_KEY: ${{ secrets.MODELBOUND_API_KEY }}
 ```
@@ -44,6 +45,7 @@ jobs:
 | `min-trust` | `0` | Fail if average trust is below this score |
 | `comment` | `true` | Post a PR summary comment |
 | `mcp-version` | `0.4.6` | Pin for local lint via `modelbound-mcp` |
+| `scan-all-on-main` | `false` | On main pushes with no changed skill files, scan all tracked files matching `skills-glob` (keeps README badges fresh) |
 
 ## Modes
 
