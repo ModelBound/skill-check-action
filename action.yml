@@ -18,20 +18,6 @@ inputs:
       .claude/skills/**/SKILL.md
       .kiro/skills/**/*.md
       .github/skills/**/SKILL.md
-      skills/**/SKILL.md
-      skills/**/*.md
-  scan-scope:
-    description: "changed = git diff only; all = walk workspace (includes gitignored sync output from prior steps)"
-    required: false
-    default: changed
-  cloud-repo:
-    description: "GitHub repo (owner/name) to pull skills from ModelBound cloud via MCP (for repos that gitignore synced skills)"
-    required: false
-    default: ""
-  cloud-repo-fallback:
-    description: "Alternate ModelBound repo slug if skills use a short repo name (e.g. Trading)"
-    required: false
-    default: ""
   publish-report:
     description: "Publish a public CI report for README badges"
     required: false
@@ -73,9 +59,6 @@ runs:
       env:
         INPUT_MODE: ${{ inputs.mode }}
         INPUT_SKILLS_GLOB: ${{ inputs.skills-glob }}
-        INPUT_SCAN_SCOPE: ${{ inputs.scan-scope }}
-        INPUT_CLOUD_REPO: ${{ inputs.cloud-repo }}
-        INPUT_CLOUD_REPO_FALLBACK: ${{ inputs.cloud-repo-fallback }}
         INPUT_PUBLISH_REPORT: ${{ inputs.publish-report }}
         INPUT_API_URL: ${{ inputs.api-url }}
         INPUT_MIN_TRUST: ${{ inputs.min-trust }}

@@ -39,9 +39,6 @@ jobs:
 | --- | --- | --- |
 | `mode` | `full` | `lint`, `trust`, `optimize`, or `full` |
 | `skills-glob` | see action.yml | Globs for skill files |
-| `scan-scope` | `changed` | `changed` = git diff only; `all` = walk workspace (includes gitignored `.modelbound/` after sync) |
-| `cloud-repo` | _(empty)_ | Pull skills from ModelBound cloud for this GitHub repo (for repos that gitignore synced skills) |
-| `cloud-repo-fallback` | _(empty)_ | Alternate repo slug in ModelBound (e.g. `Trading`) |
 | `publish-report` | `true` | Publish public badge data to modelbound.co |
 | `api-url` | `https://modelbound.co` | API base URL |
 | `min-trust` | `0` | Fail if average trust is below this score |
