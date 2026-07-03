@@ -15,6 +15,7 @@ const publishReport = process.env.INPUT_PUBLISH_REPORT !== "false";
 const apiUrl = (process.env.INPUT_API_URL || "https://modelbound.co").replace(/\/$/, "");
 const minTrust = Number(process.env.INPUT_MIN_TRUST || "0");
 const shouldComment = process.env.INPUT_COMMENT !== "false";
+const scanAllOnMain = process.env.INPUT_SCAN_ALL_ON_MAIN === "true";
 const mcpVersion = process.env.INPUT_MCP_VERSION || "0.4.6";
 const apiKey = process.env.MODELBOUND_API_KEY;
 const githubToken = process.env.GITHUB_TOKEN;
@@ -57,6 +58,13 @@ function isSkillPath(relPath) {
   return /\.(md|mdc)$/i.test(relPath) && matchesAnyGlob(relPath);
 }
 
+function listAllSkillFiles() {
+  return execSync("git ls-files", { encoding: "utf8" })
+    .split("\n")
+    .map((s) => s.trim())
+    .filter((f) => f && fs.existsSync(f) && isSkillPath(f));
+}
+
 function getChangedFiles() {
   const eventName = process.env.GITHUB_EVENT_NAME;
   try {
@@ -77,10 +85,27 @@ function getChangedFiles() {
   } catch {
     /* fall through */
   }
-  return execSync("git ls-files", { encoding: "utf8" })
-    .split("\n")
-    .map((s) => s.trim())
-    .filter(Boolean);
+  return listAllSkillFiles();
+}
+
+function resolveSkillFiles() {
+  const changed = getChangedFiles();
+  const changedSkills = changed.filter((f) => fs.existsSync(f) && isSkillPath(f));
+  if (changedSkills.length) return changedSkills;
+
+  const onMainPush =
+    process.env.GITHUB_EVENT_NAME === "push" &&
+    (process.env.GITHUB_REF === "refs/heads/main" || event.ref === "refs/heads/main");
+  if (scanAllOnMain && onMainPush) {
+    const all = listAllSkillFiles();
+    if (all.length) {
+      console.log(
+        `ModelBound skill check: no changed skill files — scanning all ${all.length} tracked file(s) on main (scan-all-on-main).`,
+      );
+      return all;
+    }
+  }
+  return [];
 }
 
 function parseSkill(relPath) {
@@ -116,7 +141,7 @@ function runLint(files) {
   return { failed, lines };
 }
 
-async function runAudit(files) {
+async function runAudit(files, lintLines) {
   const auditMode =
     mode === "optimize" ? "optimize-dry-run" : mode === "full" ? "full" : mode === "trust" ? "trust" : null;
   if (!auditMode) return null;
@@ -125,6 +150,7 @@ async function runAudit(files) {
       `mode=${mode} requires MODELBOUND_API_KEY. Add it as a repository secret, or use mode=lint for local-only checks.`,
     );
   }
+  const githubRunUrl = `${serverUrl}/${repo}/actions/runs/${runId}`;
   const res = await fetch(`${apiUrl}/api/cli/skill-audit`, {
     method: "POST",
     headers: {
@@ -135,7 +161,10 @@ async function runAudit(files) {
       mode: auditMode,
       repo,
       workflow_run_id: String(runId),
+      github_run_url: githubRunUrl,
       is_public: publishReport,
+      scanned_files: files,
+      lint_output: lintLines,
       skills: files.map(parseSkill),
     }),
   });
@@ -144,6 +173,37 @@ async function runAudit(files) {
     throw new Error(`skill-audit HTTP ${res.status}: ${JSON.stringify(body)}`);
   }
   return body;
+}
+
+function reportPageUrl() {
+  return `${apiUrl}/connect/github-actions?repo=${encodeURIComponent(repo)}`;
+}
+
+function formatFindings(audit, lintLines, lintFailed) {
+  const lines = [];
+  const results = Array.isArray(audit?.results) ? audit.results : [];
+
+  if (lintFailed && lintLines.length) {
+    lines.push("#### MCP lint errors", "", "```text", ...lintLines, "```", "");
+  }
+
+  const withFindings = results.filter((r) => Array.isArray(r?.trust?.findings) && r.trust.findings.length);
+  if (withFindings.length) {
+    lines.push("#### Trust & safety findings", "");
+    for (const r of withFindings) {
+      lines.push(`**\`${r.path}\`** — ${r.trust.total}/100 (${r.tier ?? "—"})`);
+      for (const f of r.trust.findings) {
+        const icon = f.severity === "critical" ? "🔴" : f.severity === "warn" ? "🟡" : "ℹ️";
+        lines.push(`- ${icon} **${f.severity}** · ${f.class}: ${f.message}`);
+        if (f.hint) lines.push(`  - _Hint:_ ${f.hint}`);
+      }
+      lines.push("");
+    }
+  } else if (results.length) {
+    lines.push("#### Trust & safety findings", "", "No findings — all scanned skills passed heuristics.", "");
+  }
+
+  return lines;
 }
 
 async function upsertPrComment(markdown) {
@@ -178,13 +238,18 @@ async function upsertPrComment(markdown) {
 }
 
 async function main() {
-  const changed = getChangedFiles();
-  const skillFiles = changed.filter((f) => fs.existsSync(f) && isSkillPath(f));
+  const skillFiles = resolveSkillFiles();
+  const githubRunUrl = `${serverUrl}/${repo}/actions/runs/${runId}`;
+  const pageUrl = reportPageUrl();
 
   if (!skillFiles.length) {
-    console.log("ModelBound skill check: no changed skill files matched the configured globs — skipping.");
+    console.log("ModelBound skill check: no skill files to scan — skipping.");
+    console.log(`Badge may reflect the last published report. View report: ${pageUrl}`);
+    console.log(`Latest workflow run: ${githubRunUrl}`);
     setOutput("skills-scanned", "0");
     setOutput("lint-status", "pass");
+    setOutput("report-url", pageUrl);
+    setOutput("github-run-url", githubRunUrl);
     return;
   }
 
@@ -202,7 +267,7 @@ async function main() {
 
   let audit = null;
   if (mode === "trust" || mode === "optimize" || mode === "full") {
-    audit = await runAudit(skillFiles);
+    audit = await runAudit(skillFiles, lintLines);
     console.log(JSON.stringify(audit.summary ?? audit, null, 2));
   }
 
@@ -210,11 +275,14 @@ async function main() {
   const avgTrust = summary?.avg_trust ?? null;
   const lintStatus = summary?.lint_status ?? (lintFailed ? "fail" : "pass");
   const badgeUrl = audit?.badge_url ?? `https://modelbound.co/api/badge/skills.svg?repo=${encodeURIComponent(repo)}`;
+  const storedReportUrl = audit?.report_url ?? pageUrl;
 
   setOutput("skills-scanned", String(skillFiles.length));
   if (avgTrust != null) setOutput("avg-trust", String(avgTrust));
   setOutput("lint-status", lintStatus);
   setOutput("badge-url", badgeUrl);
+  setOutput("report-url", storedReportUrl);
+  setOutput("github-run-url", githubRunUrl);
 
   const mdLines = [
     "### ModelBound Skill Check",
@@ -229,16 +297,19 @@ async function main() {
       `| Metric | Value |`,
       `| --- | --- |`,
       `| Trust | ${summary.avg_trust ?? "—"}/100 |`,
-      `| Lint | ${summary.lint_status ?? "—"} |`,
+      `| Status | ${summary.lint_status ?? "—"} |`,
       `| Findings | ${summary.findings_count ?? 0} |`,
       `| Optimize savings (est.) | ${summary.optimize_savings_pct != null ? `${summary.optimize_savings_pct}%` : "—"} |`,
       "",
-      `[View badge](${badgeUrl})`,
+      `_Status reflects trust/safety heuristics (critical → fail, warn → warn). MCP lint output is listed separately when present._`,
+      "",
+      ...formatFindings(audit, lintLines, lintFailed),
+      `[View full report](${storedReportUrl}) · [Workflow run](${githubRunUrl}) · [Badge](${badgeUrl})`,
     );
   } else if (lintFailed) {
-    mdLines.push("**Lint:** failed — see workflow logs for details.");
+    mdLines.push("#### MCP lint errors", "", "```text", ...lintLines, "```", "", `[Workflow run](${githubRunUrl})`);
   } else {
-    mdLines.push("**Lint:** passed");
+    mdLines.push("**Lint:** passed", "", `[Workflow run](${githubRunUrl})`);
   }
   await upsertPrComment(mdLines.join("\n"));
 

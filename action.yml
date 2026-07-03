@@ -38,6 +38,10 @@ inputs:
     description: "modelbound-mcp version for local lint"
     required: false
     default: "0.4.6"
+  scan-all-on-main:
+    description: "On push to main with no changed skill files, scan all tracked files matching skills-glob (keeps badges fresh)"
+    required: false
+    default: "false"
 outputs:
   skills-scanned:
     description: Number of skill files scanned
@@ -47,6 +51,10 @@ outputs:
     description: "pass, warn, or fail"
   badge-url:
     description: Public badge URL for this repo
+  report-url:
+    description: Public report page with per-skill findings
+  github-run-url:
+    description: GitHub Actions workflow run URL for this check
 runs:
   using: composite
   steps:
@@ -64,6 +72,7 @@ runs:
         INPUT_MIN_TRUST: ${{ inputs.min-trust }}
         INPUT_COMMENT: ${{ inputs.comment }}
         INPUT_MCP_VERSION: ${{ inputs.mcp-version }}
+        INPUT_SCAN_ALL_ON_MAIN: ${{ inputs.scan-all-on-main }}
         MODELBOUND_API_KEY: ${{ env.MODELBOUND_API_KEY }}
         GITHUB_TOKEN: ${{ env.GITHUB_TOKEN }}
       run: node "${{ github.action_path }}/run.mjs"
